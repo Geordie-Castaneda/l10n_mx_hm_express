@@ -10,7 +10,7 @@
     'category': 'Point of Sale',
     'version': '0.1',
     'license': 'LGPL-3',
-    'depends': ['point_of_sale'],
+    'depends': ['point_of_sale', 'sale'],
     
     'data': [
         'security/ir.model.access.csv',
@@ -19,6 +19,7 @@
         'views/pos_remission_views.xml',  
         'views/point_of_sale_view.xml',
         'views/pos_order_views.xml',
+        'wizards/pos_remission_wizard_views.xml'
     ],
 
     'assets': {
