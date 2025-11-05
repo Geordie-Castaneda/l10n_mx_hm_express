@@ -97,7 +97,7 @@ class SaleOrder(models.Model):
                     remissions_to_unlink |= remission
                 else:
                     remission.qty = new_qty
-                    remission.pending_billing_amoount = new_pending_billing_amount
+                    remission.pending_billing_amount = new_pending_billing_amount
         
         # Eliminar en lote
         if remissions_to_unlink:
