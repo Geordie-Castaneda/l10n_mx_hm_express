@@ -11,5 +11,16 @@
                 </field>
             </field>
         </record>
+
+        <record id="account_move_view_tree_inherit" model="ir.ui.view">
+            <field name="name">account.move.view.tree.inherit</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_out_invoice_tree"/>
+            <field name="arch" type="xml">
+                <field name="currency_id" position="after">
+                    <field name="delivery_note_custom" optional="show"/>
+                </field>
+            </field>
+        </record>
     </data>
 </odoo>

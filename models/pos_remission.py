@@ -8,7 +8,7 @@ class PosRemission(models.Model):
 
     product_id = fields.Many2one('product.product', string="Producto")
     qty = fields.Float(string="Cantidad", copy=False, default=0.0)
-    pending_billing_amount = fields.Float(string="Pend. Facturar", copy=False, default=0.0)
+    pending_billing_qty = fields.Float(string="Pend. Facturar", copy=False, default=0.0)
     average_cost_amount = fields.Float(string="Costo promedio", copy=False, default=0.0)
 
     total_pending_billing = fields.Float(
@@ -18,12 +18,12 @@ class PosRemission(models.Model):
         copy=False
     )
 
-    @api.depends('pending_billing_amount', 'product_id.list_price')
+    @api.depends('pending_billing_qty', 'product_id.list_price')
     def _compute_total_pending_billing(self):
         """Calcula automáticamente el total pendiente según cantidad * precio"""
         for rec in self:
             if rec.product_id:
-                rec.total_pending_billing = rec.pending_billing_amount * rec.product_id.list_price
+                rec.total_pending_billing = rec.pending_billing_qty * rec.product_id.list_price
             else:
                 rec.total_pending_billing = 0.0
 
@@ -41,7 +41,7 @@ class PosRemission(models.Model):
         created_count = 0
         updated_count = 0
         skipped_count = 0
-
+        # order_list = []
         try:
             for line in lines_data:
                 product_id_js = line.get('product_id')
@@ -61,15 +61,23 @@ class PosRemission(models.Model):
                 # Buscar si ya existe una remisión
                 existing_remission = self.search([('product_id', '=', product_id.id)], limit=1)
 
+                #Vamos a buscar si tiene factura y colocarle remision
+                # if line.get('order_id') and line.get('order_id') not in order_list:
+                #     order = self.env['pos.order'].search([('id', '=', line.get('order_id'))])
+                #     if order.account_move:
+                #         order.account_move.delivery_note_custom = True
+                #         order_list.append(
+                #             line.get('order_id')
+                #         )
+
                 if existing_remission:
                     new_qty = existing_remission.qty + line.get('qty', 0)
-                    new_pending = existing_remission.pending_billing_amount + (
-                        line.get('qty', 0) if line.get('state') != 'invoiced' else 0
-                    )
+                    new_pending = existing_remission.pending_billing_qty + line.get('qty')
+                    
 
                     existing_remission.write({
                         'qty': new_qty,
-                        'pending_billing_amount': new_pending,
+                        'pending_billing_qty': new_pending,
                         'average_cost_amount': product_id.standard_price,
                     })
                     updated_count += 1
@@ -77,8 +85,8 @@ class PosRemission(models.Model):
                 else:
                     self.create({
                         'product_id': product_id.id,
-                        'qty': line.get('qty', 0),
-                        'pending_billing_amount': line.get('qty', 0) if line.get('state') != 'invoiced' else 0,
+                        'qty': line.get('qty'),
+                        'pending_billing_qty': line.get('qty'),
                         'average_cost_amount': product_id.standard_price,
                     })
                     created_count += 1

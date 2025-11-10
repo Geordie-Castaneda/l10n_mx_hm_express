@@ -24,20 +24,20 @@ class PosRemissionWizard(models.TransientModel):
             
         remissions = self.env['pos.remission'].browse(active_ids)
         
-        # Agrupar productos y restar cantidades
+        # Agrupar productos y sumar cantidades pendientes
         product_qty = {}
         for remission in remissions:
-            if remission.product_id.id not in product_qty:
-                product_qty[remission.product_id.id] = 0
-            product_qty[remission.product_id.id] += remission.pending_billing_amount or 0
+            product_id = remission.product_id.id
+            if product_id not in product_qty:
+                product_qty[product_id] = 0
+            product_qty[product_id] += remission.pending_billing_qty or 0
         
         # Crear líneas del wizard
         line_vals = []
         for product_id, qty in product_qty.items():
-            product = self.env['product.product'].browse(product_id)
             line_vals.append((0, 0, {
                 'product_id': product_id,
-                'qty': qty,
+                'qty': qty,  # valor sugerido por defecto
             }))
         
         res['line_ids'] = line_vals
@@ -47,33 +47,50 @@ class PosRemissionWizard(models.TransientModel):
     def action_create_account_move(self):
         """Crear factura de cliente con los productos seleccionados"""
         self.ensure_one()
-        
+
         if not self.line_ids:
-            raise UserError("No hay productos para crear la orden de venta.")
-        
-        # Prepara las líneas de la orden de venta
+            raise UserError("No hay productos para crear la factura.")
+
+        active_ids = self.env.context.get('active_ids', [])
+        remissions = self.env['pos.remission'].browse(active_ids)
+
+        # Mapeamos producto -> cantidad pendiente total
+        pending_by_product = {}
+        for remission in remissions:
+            product_id = remission.product_id.id
+            if product_id not in pending_by_product:
+                pending_by_product[product_id] = 0
+            pending_by_product[product_id] += remission.pending_billing_qty or 0
+
+        # Validar cantidades
+        for line in self.line_ids:
+            pending_qty = pending_by_product.get(line.product_id.id, 0)
+            if line.qty > pending_qty:
+                raise UserError(
+                    f"No puede facturar {line.qty} unidades de '{line.product_id.display_name}'. "
+                    f"Solo tiene {pending_qty} pendientes de facturar."
+                )
+
+        # Crear líneas de factura
         aml_vals = []
-
-
         for line in self.line_ids:
             if line.qty > 0:
-                print(f"line product_id {line.product_id} product_tmplate_id {line.product_id.product_tmpl_id}")
                 aml_vals.append((0, 0, {
                     'product_id': line.product_id.id,
-                    'quantity': line.qty
+                    'quantity': line.qty,
                 }))
 
-        # Crear la orden de venta
+        # Crear la factura
         am_vals = {
             'partner_id': self.partner_id.id,
-            'move_type':'out_invoice',
-            'delivery_note_custom': False,
+            'move_type': 'out_invoice',
+            'delivery_note_custom': True,
             'invoice_line_ids': aml_vals,
         }
         
         account_move = self.env['account.move'].create(am_vals)
 
-        # Redirigir a la orden de venta creada
+        # Redirigir a la factura creada
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'account.move',
@@ -82,7 +99,8 @@ class PosRemissionWizard(models.TransientModel):
             'target': 'current',
             'context': self.env.context,
         }
-    
+
+
 class PosRemissionWizardLine(models.TransientModel):
     _name = 'pos.remission.wizard.line'
     _description = "Líneas del wizard de remisiones"

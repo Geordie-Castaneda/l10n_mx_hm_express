@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <menuitem 
+        id="menu_sale_remission"
+        name="Listado de remisiones"
+        parent="sale.menu_sale_invoicing"
+        action="pos_remission_action"
+        sequence="5"/>
+</odoo>
