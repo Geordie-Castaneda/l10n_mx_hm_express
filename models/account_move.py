@@ -6,70 +6,72 @@ class AccountMove(models.Model):
     _inherit = 'account.move'
 
     delivery_note_custom = fields.Boolean(
-        string="Nota de remisión", 
+        string="Viene de remisión",
         default=False, 
         copy=False,
-        help="Habilita la gestión de inventario mediante notas de remisión",
+        help="Indica si la factura fue generada desde una nota de remisión",
         tracking=True
     )
 
+    # === CONFIRMAR FACTURA ===
     def action_post(self):
-        """Extiende la validación de facturas para manejar notas de remisión"""
+        """Cuando se valida una factura, actualizar las remisiones relacionadas."""
         res = super().action_post()
 
         for move in self:
+            # Solo aplicar la lógica si la factura viene de remisión
+            if not move.delivery_note_custom:
+                continue
+
             for line in move.invoice_line_ids:
                 product = line.product_id
                 qty = line.quantity
+                if not product:
+                    continue
 
-                # Buscar remisión del producto
-                remission = self.env['pos.remission'].search([('product_id', '=', product.id)], limit=1)
+                # Buscar remisiones del producto con cantidad pendiente
+                remission = self.env['pos.remission'].search([
+                    ('product_id', '=', product.id),
+                    ('pending_billing_qty', '>', 0)
+                ], limit=1)
 
-                # Si la factura es NOTA DE REMISIÓN, SUMA la cantidad pendiente
-                if move.delivery_note_custom:
-                    if remission:
-                        remission.pending_billing_amount += qty
-                    else:
-                        self.env['pos.remission'].create({
-                            'product_id': product.id,
-                            'qty': 0.0,
-                            'pending_billing_amount': qty,
-                            'average_cost_amount': line.product_id.lst_price,
-                        })
+                if remission:
+                    if remission.pending_billing_qty < qty:
+                        raise UserError(
+                            f"No puede facturar {qty} unidades de '{product.display_name}'. "
+                            f"Solo tiene {remission.pending_billing_qty} pendientes de facturar."
+                        )
+                    remission.pending_billing_qty -= qty
                 else:
-                    # Si NO es nota de remisión, RESTA (porque se está facturando algo pendiente)
-                    if remission:
-                        remission.pending_billing_amount -= qty
-                        if remission.pending_billing_amount < 0:
-                            remission.pending_billing_amount = 0
-                    else:
-                        # Si no existe registro, podrías decidir crear uno con negativo o lanzar error
-                        # Aquí mejor lo dejamos en 0 por seguridad
-                        self.env['pos.remission'].create({
-                            'product_id': product.id,
-                            'qty': 0.0,
-                            'pending_billing_amount': 0.0,
-                            'average_cost_amount': line.product_id.lst_price,
-                        })
+                    raise UserError(
+                        f"No existe una remisión con pendiente para el producto '{product.display_name}'."
+                    )
         return res
 
+    # === CANCELAR FACTURA ===
     def button_cancel(self):
-        """Maneja la cancelación de facturas con notas de remisión"""
+        """Revertir el descuento en remisiones solo si la factura ya fue confirmada."""
         res = super().button_cancel()
 
         for move in self:
+            # Solo aplica si viene de remisión y si estaba publicada
+            if not move.delivery_note_custom or move.state != 'posted':
+                continue
+
             for line in move.invoice_line_ids:
                 product = line.product_id
                 qty = line.quantity
+                if not product:
+                    continue
 
-                remission = self.env['pos.remission'].search([('product_id', '=', product.id)], limit=1)
+                remission = self.env['pos.remission'].search([
+                    ('product_id', '=', product.id)
+                ], limit=1)
+
                 if remission:
-                    # Si la factura era NOTA DE REMISIÓN, revertir sumando → restar
-                    if move.delivery_note_custom:
-                        remission.pending_billing_amount -= qty
-                        if remission.pending_billing_amount < 0:
-                            remission.pending_billing_amount = 0
-                    else:
-                        # Si era factura normal, revertir la resta → sumar
-                        remission.pending_billing_amount += qty
+                    remission.pending_billing_qty += qty
+                    move.message_post(body=(
+                        f"Revertido en remisiones: +{qty} unidades del producto {product.display_name}."
+                    ))
         return res
+

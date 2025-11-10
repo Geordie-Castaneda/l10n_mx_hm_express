@@ -20,6 +20,7 @@
         'views/pos_remission_views.xml',  
         'views/point_of_sale_view.xml',
         'views/pos_order_views.xml',
+        'views/sale_menus.xml',
         'views/sale_order_views.xml',
         'wizards/pos_remission_wizard_views.xml'
     ],

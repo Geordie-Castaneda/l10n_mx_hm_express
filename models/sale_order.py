@@ -37,10 +37,11 @@ class SaleOrder(models.Model):
                 if remission:
                     # Si existe, actualizamos las cantidades
                     new_qty = remission.qty + qty
-
+                    new_pending_billing_qty = remission.pending_billing_qty + qty
                     remission.write({
                         'qty': new_qty,
                         'average_cost_amount': product.standard_price,
+                        'pending_billing_qty': new_pending_billing_qty
                     })
 
                     _msg = f"🔁 Actualizada remisión producto {product.display_name}: +{qty}"
@@ -50,6 +51,7 @@ class SaleOrder(models.Model):
                         'product_id': product.id,
                         'qty': qty,
                         'average_cost_amount': product.standard_price,
+                        'pending_billing_qty': qty,
                     })
                     _msg = f"🆕 Creada nueva remisión para {product.display_name}: {qty}"
 
@@ -62,11 +64,12 @@ class SaleOrder(models.Model):
         res = super().action_cancel()
 
         for order in self:
-            if not order.delivery_note_custom:
+            # Solo aplica si es nota de remisión y estaba confirmada (state = sale)
+            if not order.delivery_note_custom or order.state != 'sale':
                 continue
 
             for line in order.order_line:
-                product = line.product_d
+                product = line.product_id
                 qty = line.product_uom_qty
 
                 if not product or not product.id:
@@ -79,19 +82,21 @@ class SaleOrder(models.Model):
                 if remission:
                     # Restamos las cantidades y validamos que no queden negativas
                     new_qty = remission.qty - qty
+                    new_pending_billing_qty = remission.pending_billing_qty - qty
 
                     if new_qty < 0:
                         new_qty = 0
-                    if new_pending < 0:
-                        new_pending = 0
+                    if new_pending_billing_qty < 0:
+                        new_pending_billing_qty = 0
 
                     remission.write({
                         'qty': new_qty,
+                        'pending_billing_qty': new_pending_billing_qty
                     })
 
                     print(f"❌ Orden cancelada → Remisión actualizada {product.display_name}: -{qty}")
-
         return res
+
 
     def _create_invoices(self, grouped=False, final=False, date=None):
         """Hereda la creación de facturas para copiar delivery_note_custom a account.move"""

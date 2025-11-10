@@ -21,7 +21,7 @@
                 <list create="false">
                     <field name="product_id"/>
                     <field name="qty"/>
-                    <field name="pending_billing_amount"/>
+                    <field name="pending_billing_qty"/>
                     <field name="average_cost_amount"/>
                     <field name="total_pending_billing"/>
                 </list>
