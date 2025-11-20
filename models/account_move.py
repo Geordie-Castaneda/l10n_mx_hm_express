@@ -15,10 +15,12 @@ class AccountMove(models.Model):
 
     # === CONFIRMAR FACTURA ===
     def action_post(self):
+        
         """Cuando se valida una factura, actualizar las remisiones relacionadas."""
         res = super().action_post()
 
         for move in self:
+            print(f"se esta facturando algo {move.name}, {move.id}")
             # Solo aplicar la lógica si la factura viene de remisión
             if not move.delivery_note_custom:
                 continue
@@ -54,6 +56,7 @@ class AccountMove(models.Model):
         res = super().button_cancel()
 
         for move in self:
+            print(f"se esta Cancelando alguna factura {move.name}, {move.id}")
             # Solo aplica si viene de remisión y si estaba publicada
             if not move.delivery_note_custom or move.state != 'posted':
                 continue
