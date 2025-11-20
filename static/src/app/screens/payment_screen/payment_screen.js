@@ -3,26 +3,58 @@
 import { PaymentScreen } from "@point_of_sale/app/screens/payment_screen/payment_screen";
 import { patch } from "@web/core/utils/patch";
 import { rpc } from '@web/core/network/rpc';
+import { _t } from "@web/core/l10n/translation";
+import { AlertDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 
 patch(PaymentScreen.prototype, {
     /**
      * Parcheamos validateOrder para añadir lógica antes o después de la validación estándar.
      */
     async validateOrder(isForceValidate) {
-        // --- AQUÍ VA TU LÓGICA ANTES DE LA VALIDACIÓN ORIGINAL ---
         console.log("🟢 what's up man - Lógica agregada antes de validar la orden.");
         const order = this.pos.get_order();
-        console.log("Que es this in validate_order ", this)
-        console.log("Que es order in validate_order ", order)
-        // llamamos a Python vía RPC
-        const amount_total_words = await this.getAmountTotalWords(order.amount_total, order.config_id.currency_id.id);
-        order.amount_total_words = amount_total_words;
-        
-        const result = await super.validateOrder(isForceValidate);
+        console.log("Que es this in validate_order ", this);
+        console.log("Que es order in validate_order ", order);
+        console.log("order.delivery_note_custom ", order.delivery_note_custom);
+        console.log("order.to_invoice ", order.to_invoice);
 
-        await this.sendingLinesCreate(order);
         
-        return result;
+        // if (order.delivery_note_custom == true && order.to_invoice == true) {
+        //     console.log("Esto no debe de pasar <------- \n");
+        //     // Vamos a mostrar un popup en JS
+        //     // await this.showPopup('ErrorPopup', {
+        //     //     title: 'Error de Validación',
+        //     //     body: 'No se puede facturar una nota de remisión',
+        //     // });
+        //     this.dialog.add(AlertDialog, {
+        //         title: _t("Error de validación"),
+        //         body: _t("No se puede facturar una nota de remisión"),
+        //     });
+        //     return false;
+
+        // } else {
+        if (order.delivery_note_custom == true && order.to_invoice == false){
+            const amount_total_words = await this.getAmountTotalWords(order.amount_total, order.config_id.currency_id.id);
+            order.amount_total_words = amount_total_words;
+            
+            const result = await super.validateOrder(isForceValidate);
+            await this.sendingLinesCreate(order);
+            return result;
+
+        }else{
+            const result = await super.validateOrder(isForceValidate);
+            return false;
+        }
+        
+        // }
+    },
+
+    // Método para mostrar el popup
+    showPopupNotification(message) {
+        this.showPopup('ErrorPopup', {
+            title: 'Error de Validación',
+            body: message
+        });
     },
 
     async getAmountTotalWords(total, currency_id) {
